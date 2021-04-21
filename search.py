@@ -35,7 +35,7 @@ def artist_term(text: str):
 
 
 def search_album(title: str, artist: Optional[str]) -> Optional[str]:
-    print(f"QUERY  name: {album_term(title)}, artist: {artist_term(artist or '')}'", file=sys.stderr)
+    print(f"QUERY  name: {album_term(title)}, artist: {artist_term(artist or '')}", file=sys.stderr)
 
     # Query with fields does not work for Japanese titles!
     query_title = to_query('album', title)
