@@ -26,12 +26,53 @@ def colored(text: str, color: colorama.ansi.AnsiCodes):
     return color + text + colorama.Style.RESET_ALL
 
 
+def track_term(text: str):
+    return colored(text, colorama.Fore.LIGHTYELLOW_EX)
+
+
 def album_term(text: str):
     return colored(text, colorama.Fore.LIGHTMAGENTA_EX)
 
 
 def artist_term(text: str):
     return colored(text, colorama.Fore.LIGHTBLUE_EX)
+
+
+def search_track(track: str, album: str, artist: Optional[str]) -> Optional[str]:
+    print(f"QUERY  track: {track_term(track)} album: {album_term(album)} artist: {artist_term(artist or '')}", file=sys.stderr)
+
+    # Query with fields does not work for Japanese titles!
+    query_track = to_query('track', track)
+    query_album = to_query('album', album)
+
+    if artist is not None:
+        query_artist = to_query('artist', artist)
+    else:
+        query_artist = ''
+
+    raw_query = f'{track} {album} {artist}'
+    query = f'{query_track} {query_album} {query_artist}'
+    if len(query) > 80:
+        query = f'{query_track} {query_album}'
+
+    results = sp.search(query, limit=1, type="track", market='JP')
+    if results['tracks']['total'] == 0:
+        if raw_query != query:
+            results = sp.search(query, limit=1, type="track", market='JP')
+
+    if results['tracks']['total'] > 0:
+        sp_track = results['tracks']['items'][0]
+        sp_album = sp_track['album']
+        artists = ' '.join(artist['name'] for artist in sp_track['artists'])
+        id_ = sp_track['id']
+        print(
+            f"{colored('Found!', colorama.Fore.GREEN)} track: {track_term(sp_track['name'])} "
+            f"album: {album_term(sp_album['name'])} artist: {artist_term(artists)}, ID: {id_}",
+            file=sys.stderr
+        )
+        return id_
+    else:
+        print(f"{colored('Not found!', colorama.Fore.RED)}: {raw_query}", file=sys.stderr)
 
 
 def search_album(title: str, artist: Optional[str]) -> Optional[str]:
@@ -53,12 +94,24 @@ def search_album(title: str, artist: Optional[str]) -> Optional[str]:
         artists = ' '.join(artist['name'] for artist in album['artists'])
         id_ = album['id']
         print(
-            f"{colored('Found!', colorama.Fore.GREEN)} name: {album_term(album['name'])}, artist: {artist_term(artists)}, ID: {id_} ",
+            f"{colored('Found!', colorama.Fore.GREEN)} name: {album_term(album['name'])}, artist: {artist_term(artists)}, ID: {id_}",
             file=sys.stderr
         )
         return id_
     else:
         print(f"{colored('Not found!', colorama.Fore.RED)}", file=sys.stderr)
+
+
+def tracks(json_file: os.PathLike):
+    track_ids = []
+    for track in json.load(open(json_file)):
+        # Save only liked tracks
+        if not track['liked']:
+            continue
+        time.sleep(1)
+        if (track_id := search_track(track['track'], track['album'], track.get('artist'))) is not None:
+            track_ids.append(track_id)
+    print(json.dumps({'track_ids': track_ids}))
 
 
 def albums(json_file: os.PathLike):
@@ -73,12 +126,16 @@ def albums(json_file: os.PathLike):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Search Spotify track/album IDs')
     parser.add_argument('-a', '--albums', dest='albums_json', type=str, help="Albums JSON file")
+    parser.add_argument('-t', '--tracks', dest='tracks_json', type=str, help="Tracks JSON file")
     args = parser.parse_args()
 
-    if args.albums_json is None:
+    if args.albums_json is None and args.tracks_json is None:
         parser.print_help()
         sys.exit(1)
 
     colorama.init()
     if args.albums_json is not None:
         albums(args.albums_json)
+
+    if args.tracks_json is not None:
+        tracks(args.tracks_json)
